@@ -2,7 +2,7 @@
 
 Aplicação desenvolvida em Python para identificar se uma mensagem é **spam** ou **legítima**. O projeto utiliza processamento de texto e aprendizado de máquina, com uma interface web feita em Flask para testar mensagens.
 
-**Acesse a aplicação:** [Classificador de SPAM](https://classificacao-de-spam.vercel.app/)
+**Acesse a aplicação:** https://classificacao-de-spam.vercel.app/
 
 ## Tecnologias
 
