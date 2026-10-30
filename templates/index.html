@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Classifique mensagens como spam ou legítimas.">
+    <title>Classificador de SPAM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="container">
+        <header class="topo">
+            <a class="logo" href="/">Classificador de SPAM</a>
+        </header>
+
+        <section class="intro">
+            <h1>Verifique uma mensagem</h1>
+            <p>Insira o texto de um e-mail ou mensagem. O modelo vai indicar se o conteúdo parece spam ou legítimo.</p>
+        </section>
+
+        <section class="painel">
+            <form id="formulario">
+                <label for="mensagem">Texto para análise</label>
+                <textarea id="mensagem" maxlength="10000" placeholder="Cole sua mensagem aqui..." required></textarea>
+                <div class="acoes">
+                    <small id="contador">0 / 10000</small>
+                    <button class="limpar" type="button" id="limpar">Limpar</button>
+                </div>
+                <button class="analisar" id="analisar" type="submit">Analisar mensagem</button>
+            </form>
+
+            <section id="resultado" class="resultado" aria-live="polite" hidden>
+                <p class="tag" id="tipo-resultado">RESULTADO</p>
+                <h2 id="titulo-resultado"></h2>
+                <p id="descricao-resultado"></p>
+                <div id="confianca" class="confianca" hidden>
+                    <div><span>Probabilidade indicada pelo modelo</span><strong id="valor-confianca"></strong></div>
+                    <div class="barra"><span id="preenchimento"></span></div>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script>
+        const formulario = document.querySelector("#formulario");
+        const mensagem = document.querySelector("#mensagem");
+        const contador = document.querySelector("#contador");
+        const resultado = document.querySelector("#resultado");
+        const botao = document.querySelector("#analisar");
+
+        mensagem.addEventListener("input", () => {
+            contador.textContent = mensagem.value.length + " / 10000";
+        });
+
+        document.querySelector("#limpar").addEventListener("click", () => {
+            mensagem.value = "";
+            contador.textContent = "0 / 10000";
+            resultado.hidden = true;
+            mensagem.focus();
+        });
+
+        formulario.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const texto = mensagem.value.trim();
+            if (!texto) {
+                mensagem.focus();
+                return;
+            }
+
+            botao.disabled = true;
+            botao.textContent = "Analisando...";
+            resultado.hidden = true;
+
+            try {
+                const resposta = await fetch("/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text: texto })
+                });
+                const dados = await resposta.json();
+                if (!resposta.ok) {
+                    throw new Error(dados.error || "Não foi possível analisar a mensagem.");
+                }
+
+                const spam = Number(dados.label) === 1;
+                const probabilidades = dados.probabilities || {};
+                const confianca = Number(probabilidades[String(dados.label)]);
+
+                resultado.hidden = false;
+                resultado.className = "resultado " + (spam ? "spam" : "legitimo");
+                document.querySelector("#tipo-resultado").textContent = spam ? "ATENÇÃO" : "MENSAGEM LEGÍTIMA";
+                document.querySelector("#titulo-resultado").textContent = spam
+                    ? "O modelo identificou possível spam"
+                    : "O modelo não identificou spam";
+                document.querySelector("#descricao-resultado").textContent = spam
+                    ? "Tenha cuidado com links, anexos e pedidos de informações pessoais."
+                    : "A mensagem foi classificada como legítima. Ainda assim, confira o remetente antes de abrir links ou anexos.";
+
+                const areaConfianca = document.querySelector("#confianca");
+                if (Number.isFinite(confianca)) {
+                    const percentual = Math.max(0, Math.min(100, confianca * 100));
+                    areaConfianca.hidden = false;
+                    document.querySelector("#valor-confianca").textContent = percentual.toFixed(1).replace(".", ",") + "%";
+                    document.querySelector("#preenchimento").style.width = percentual + "%";
+                } else {
+                    areaConfianca.hidden = true;
+                }
+            } catch (erro) {
+                resultado.hidden = false;
+                resultado.className = "resultado erro";
+                document.querySelector("#tipo-resultado").textContent = "ERRO";
+                document.querySelector("#titulo-resultado").textContent = "Não foi possível analisar";
+                document.querySelector("#descricao-resultado").textContent = erro.message;
+                document.querySelector("#confianca").hidden = true;
+            } finally {
+                botao.disabled = false;
+                botao.textContent = "Analisar mensagem";
+            }
+        });
+    </script>
+</body>
+</html>
