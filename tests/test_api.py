@@ -17,6 +17,13 @@ def test_home_route(client):
     assert b"Classificador de SPAM" in response.data
 
 
+def test_stylesheet_route(client):
+    response = client.get("/style.css")
+    assert response.status_code == 200
+    assert response.content_type.startswith("text/css")
+    assert b":root" in response.data
+
+
 def test_health_route(client):
     response = client.get("/health")
     assert response.status_code == 200
