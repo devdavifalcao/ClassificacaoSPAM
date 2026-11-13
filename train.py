@@ -23,7 +23,7 @@ STEMMER = SnowballStemmer("english")
 def normalize_text(text):
     if not isinstance(text, str):
         text = str(text)
-    text = re.sub(r"http\\S+|www\\.\\S+", " ", text)
+    text = re.sub(r"http\S+|www\.\S+", " ", text)
     words = re.findall(r"[A-Za-zÀ-ÿ0-9]+", text.lower())
     processed = [
         STEMMER.stem(word)
