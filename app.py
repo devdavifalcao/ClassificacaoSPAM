@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 from train import spam_detector
 
 app = Flask(__name__)
@@ -7,6 +7,11 @@ app = Flask(__name__)
 @app.get("/")
 def home():
     return render_template("index.html")
+
+
+@app.get("/style.css")
+def stylesheet():
+    return send_from_directory("public", "style.css")
 
 
 @app.get("/health")
