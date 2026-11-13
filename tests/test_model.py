@@ -9,7 +9,14 @@ def test_normalize_text_basic():
     assert isinstance(result, str)
     assert "hello" in result
     assert "test" in result
-    assert "this" not in result
+    assert "this" in result
+
+
+def test_normalize_text_preserves_portuguese_and_indicators():
+    result = normalize_text("Não envie sua senha! Acesse https://exemplo.com")
+    assert "não" in result
+    assert "senha" in result
+    assert "urltoken" in result
 
 
 def test_etl_pipeline_does_not_balance_before_split():
