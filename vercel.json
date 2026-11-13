@@ -1,9 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "app.py": {
-      "includeFiles": "{spam_model.joblib,tfidf_vectorizer.joblib}",
-      "excludeFiles": "{tests/**,emails.csv,emails_pt.csv,utils.py,static/**}"
-    }
-  }
-}
