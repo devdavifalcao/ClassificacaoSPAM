@@ -6,9 +6,9 @@ import pandas as pd
 from nltk.stem.snowball import SnowballStemmer
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
 from sklearn.metrics import accuracy_score, classification_report
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.utils import resample
+from sklearn.pipeline import Pipeline
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +23,7 @@ STEMMER = SnowballStemmer("english")
 def normalize_text(text):
     if not isinstance(text, str):
         text = str(text)
-    text = re.sub(r"http\S+|www\.\S+", " ", text)
+    text = re.sub(r"http\\S+|www\\.\\S+", " ", text)
     words = re.findall(r"[A-Za-zÀ-ÿ0-9]+", text.lower())
     processed = [
         STEMMER.stem(word)
@@ -55,37 +55,78 @@ def preprocessing_and_train(csv_path=CSV_PATH, test_size=0.2, random_state=42):
         raise ValueError("A base precisa ter exemplos das duas classes: spam (1) e legítimo (0).")
 
     X_train, X_test, y_train, y_test = train_test_split(
-        df["text_norm"], df[label_col], test_size=test_size,
-        random_state=random_state, stratify=df[label_col]
+        df["text_norm"],
+        df[label_col],
+        test_size=test_size,
+        random_state=random_state,
+        stratify=df[label_col],
     )
 
-    # O balanceamento acontece só no treino, sem repetir exemplos no teste.
-    treino = pd.DataFrame({"text": X_train, "label": y_train})
-    spam = treino[treino["label"] == 1]
-    legitimos = treino[treino["label"] == 0]
+    menor_classe = int(y_train.value_counts().min())
+    if menor_classe < 2:
+        raise ValueError(
+            "Cada classe precisa ter pelo menos dois exemplos no conjunto de treino "
+            "para permitir a validação cruzada."
+        )
 
-    if len(spam) < len(legitimos):
-        spam = resample(spam, replace=True, n_samples=len(legitimos), random_state=random_state)
-    elif len(legitimos) < len(spam):
-        legitimos = resample(legitimos, replace=True, n_samples=len(spam), random_state=random_state)
+    n_splits = min(5, menor_classe)
+    cross_validation = StratifiedKFold(
+        n_splits=n_splits,
+        shuffle=True,
+        random_state=random_state,
+    )
 
-    treino = pd.concat([spam, legitimos]).sample(frac=1, random_state=random_state)
-    vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=2)
-    X_train_tfidf = vectorizer.fit_transform(treino["text"])
+    pipeline = Pipeline([
+        (
+            "vectorizer",
+            TfidfVectorizer(
+                sublinear_tf=True,
+                strip_accents="unicode",
+            ),
+        ),
+        ("classifier", MultinomialNB()),
+    ])
 
-    model = MultinomialNB()
-    model.fit(X_train_tfidf, treino["label"])
+    parameters = {
+        "vectorizer__ngram_range": [(1, 1), (1, 2)],
+        "vectorizer__min_df": [1, 2],
+        "classifier__alpha": [0.1, 0.5, 1.0, 2.0],
+    }
 
-    y_pred = model.predict(vectorizer.transform(X_test))
+    search = GridSearchCV(
+        estimator=pipeline,
+        param_grid=parameters,
+        scoring="f1_macro",
+        cv=cross_validation,
+        n_jobs=-1,
+        refit=True,
+    )
+    search.fit(X_train, y_train)
+
+    best_pipeline = search.best_estimator_
+    vectorizer = best_pipeline.named_steps["vectorizer"]
+    model = best_pipeline.named_steps["classifier"]
+
+    y_pred = best_pipeline.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     report = classification_report(y_test, y_pred, digits=4, zero_division=0)
 
+    print(f"Melhores parâmetros: {search.best_params_}")
+    print(f"Melhor F1 macro na validação cruzada: {search.best_score_:.4f}")
     print(f"Acurácia no conjunto de teste: {accuracy:.4f}")
-    print("Relatório de classificação:\n", report)
+    print("Relatório de classificação:\\n", report)
+
     joblib.dump(model, MODEL_PATH)
     joblib.dump(vectorizer, VECTORIZER_PATH)
 
-    return {"model": model, "vectorizer": vectorizer, "accuracy": accuracy, "report": report}
+    return {
+        "model": model,
+        "vectorizer": vectorizer,
+        "accuracy": accuracy,
+        "report": report,
+        "best_params": search.best_params_,
+        "cross_validation_score": search.best_score_,
+    }
 
 
 def spam_detector(content):
