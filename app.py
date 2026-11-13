@@ -1,7 +1,14 @@
 from flask import Flask, jsonify, render_template, request, send_from_directory
-from train import spam_detector
 
 app = Flask(__name__)
+
+
+def spam_detector(content):
+    # Importa as bibliotecas de machine learning somente quando houver uma análise.
+    # Assim, uma falha no carregamento do modelo não impede a página inicial de abrir.
+    from train import spam_detector as detect
+
+    return detect(content)
 
 
 @app.get("/")
@@ -34,8 +41,8 @@ def predict():
     except FileNotFoundError:
         return jsonify({"error": "Modelo não encontrado. Execute train.py antes de analisar mensagens."}), 503
     except Exception:
-        app.logger.exception("Erro ao classificar mensagem")
-        return jsonify({"error": "Não foi possível classificar a mensagem."}), 500
+        app.logger.exception("Erro ao carregar o modelo ou classificar mensagem")
+        return jsonify({"error": "Não foi possível classificar a mensagem. Verifique os logs do servidor."}), 500
 
 
 if __name__ == "__main__":
